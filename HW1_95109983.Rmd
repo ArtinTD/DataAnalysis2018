@@ -1,0 +1,393 @@
+---
+title: "Data Analysis Homework 1"
+author: "Artin Tajdini"
+date: "February 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 1
+
+### n = 4 table
+
+```{r}
+n = 4
+
+#algoritm for n = 4k
+m4 = matrix(1:n^2, nrow = n, ncol = n, byrow = TRUE)
+
+m4[1:n/4, 1:n/4] = n^2 + 1 - m4[1:n/4, 1:n/4]
+m4[1:n/4, (3*n/4 + 1):n] = n^2 + 1 - m4[1:n/4, (3*n/4 + 1):n]
+m4[(3*n/4 + 1):n, 1:n/4] = n^2 + 1 - m4[(3*n/4 + 1):n, 1:n/4]
+m4[(3*n/4 + 1):n, (3*n/4 + 1):n] = n^2 + 1 - m4[(3*n/4 + 1):n, (3*n/4 + 1):n]
+m4[(n/4 + 1):3*n/4, (n/4 + 1):3*n/4] = n^2 + 1 - m4[(n/4 + 1):3*n/4, (n/4 + 1):3*n/4]
+
+m4
+
+```
+
+the algorithm above generates magic matrix for every n = 4k
+
+### n = 5 table
+
+```{r}
+n = 5
+
+#algoritm for n = 2k + 1
+magic.odd = function(n){
+  m5 = matrix(0, nrow = n, ncol = n)
+  cnt = 1
+  i = 1 + (n/2)
+  j = n
+  
+  while (cnt <= n * n) {
+    if (i == 0 & j == n + 1) {
+      j = n - 1
+      i = 1
+    } else{
+      j = 1 + ((j - 1 + n) %% n)
+      i = 1 + ((i - 1 + n) %% n)
+    }
+    
+    if( m5[i,j] != 0 ){
+      j = j - 2
+      i = i + 1
+    } else{
+      m5[i,j] = cnt
+      cnt = cnt + 1
+      i = i - 1
+      j = j + 1
+    }
+    
+  }
+  m5 
+}
+
+
+m5 = magic.odd(5)
+m5
+
+```
+
+the algorithm above generates a magic matrix for every odd n
+
+### n = 6 table
+
+```{r}
+n = 6
+
+#algoritm for n = 4k + 2
+mbase = magic.odd(n/2)
+
+#flipping magic base
+for (i in 1:(n/4)) {
+  tmp = mbase[,i]
+  mbase[,i] = mbase[,((n/2)-i) + 1]
+  mbase[,((n/2) - i) + 1] = tmp
+}
+
+#rotating magic base
+
+for(i in 1:((n/4))){
+  for (j in 1:((n/4) + 1)) {
+      tmp = mbase[j, (n/2) - i + 1]
+      mbase[j, (n/2) - i + 1] = mbase[i,j]
+      mbase[i,j] = mbase[(n/2) - j + 1, i]
+      mbase[(n/2) - j + 1, i] = mbase[(n/2) - i + 1, (n/2) - j + 1]
+      mbase[(n/2) - i + 1, (n/2) - j + 1] = tmp
+
+  }
+}
+
+#main part
+m6 = matrix(0, nrow = n, ncol = n, byrow = TRUE)
+
+m6[1:(n/2), 1:(n/2)] = mbase
+m6[(n/2 + 1):n, 1:(n/2)] = mbase + 3 * n^2/4
+m6[1:(n/2), (n/2 + 1):n] = mbase + 2 * n^2/4
+m6[(n/2 + 1):n, (n/2 + 1):n] = mbase + n^2/4
+
+
+lc = floor((n/4)) + 1
+rc = lc - 1
+
+for (i in 1:(n/2)) {
+  for (j in 1:(n/2)) {
+    if(j < lc | (i == lc & j == lc)){
+      if(!(j == 1 && i == lc )){
+        tmp = m6[i, j]
+        m6[i,j] = m6[i + (n/2), j]
+        m6[i + (n/2), j] = tmp
+      }
+      
+    }
+  }  
+}
+
+m6
+
+```
+
+## Question 2
+
+first I find every valid state for first 5 numbers and put it in a list of lists named p1!
+
+then I find every valid state for second 5 numbers based on every valid state of first 5 and put this valis states in a list of list named p2!
+
+at last I fond every valid state of last three numbers base on every valid state of first 10 
+
+```{r}
+a = numeric(13)
+
+#first part
+
+p1 = vector(mode = "list")
+
+for (i in 1:13) {
+  if(i %in% a)
+    next
+  a[1] = i
+    for (j in 1:13) {
+      if(j %in% a)
+        next
+      a[2] = j
+      
+        for (k in 1:13) {
+          if(k %in% a)
+            next
+          a[3] = k
+          
+          for (l in 1:13) {
+            if(l %in% a)
+              next
+            a[4] = l
+            
+            for (z in 1:13) {
+              if(z %in% a)
+                next
+
+              if( i / (j + k) == (j + k) / (k + l + z)
+                  & (i + j) / (j + k) < 1 ){
+                    p1 = append(p1, list( list(i,j,k,l,z) ) )
+              }
+            }
+          a[4] = 0
+        }
+        a[3] = 0
+      }
+  
+    a[2] = 0
+  }
+  
+  a[1] = 0
+}
+
+#second part
+
+p2 = vector(mode = "list")
+
+for (e in p1) {
+  a[1:5]= as.numeric( e )
+  
+  for (i in 1:13) {
+  if(i %in% a)
+    next
+  a[6] = i
+  for (j in 1:13) {
+    if(j %in% a)
+      next
+    a[7] = j
+    
+    for (k in 1:13) {
+      if(k %in% a)
+        next
+      a[8] = k
+      
+      for (l in 1:13) {
+        if(l %in% a)
+          next
+        a[9] = l
+        
+        for (z in 1:13) {
+          if(z %in% a)
+            next
+          
+          if( i / (j + i) == (j + i) / (k + l + j)
+              &  i / (j + i) == (k + l + j) / ( a[5] + l + z)){
+            p2 = append(p2, list( c(e, list(i,j,k,l,z)) ))
+          }
+        }
+        a[9] = 0
+      }
+      a[8] = 0
+    }
+    
+    a[7] = 0
+  }
+  
+  a[6] = 0
+}
+}
+
+#last part
+
+ans = numeric(13)
+
+for (e in p2) {
+  a[1:10]= as.numeric( e )
+  
+  for (i in 1:13) {
+    if(i %in% a)
+      next
+    a[11] = i
+    for (j in 1:13) {
+      if(j %in% a)
+        next
+      a[12] = j
+      
+      for (k in 1:13) {
+        if(k %in% a)
+          next
+        a[13] = k
+        
+            if( (i + j) / (j + k) == (j + k) / (k + a[10])
+                & (i + j) / (j + k) < 1){
+              ans = a
+        }
+        a[13] = 0
+      }
+      
+      a[12] = 0
+    }
+    
+    a[11] = 0
+  }
+}
+
+ans
+
+```
+
+## Third Question
+
+for every part I check every $2^n$ possibilities of people on circle being liar and if state is valid I add number of liars on that state to a list
+
+### part 1
+
+```{r}
+number.lyer1 = numeric()
+
+for (i in 0:((2^16) - 1)) {
+  arr = as.integer( intToBits(i) )
+  flag = FALSE
+  for (j in 1:16) {
+    l = j - 1
+    r = j + 1
+    
+    if(l == 0)
+      l = 16
+    
+    if(r == 17)
+      r = 1
+    
+    if(arr[j] == 0 & sum(arr[c(l,r)]) != 2)
+      flag = TRUE
+    
+    if(arr[j] == 1 & sum( arr[c(l,r)] ) == 2)
+      flag = TRUE
+    
+  }
+  
+  if(!flag)
+    number.lyer1 = append(number.lyer1, sum(arr))
+  
+}
+
+unique(number.lyer1)
+
+```
+
+### part 2
+
+```{r}
+number.lyer2 = numeric()
+
+for (i in 0:((2^12) - 1)) {
+  arr = as.integer( intToBits(i) )
+  flag = FALSE
+    for (j in 1:12) {
+      l = j - 1
+      r = j + 1
+      
+      if(l == 0)
+        l = 12
+      
+      if(r == 13)
+        r = 1
+      
+      if(arr[j] == 0 & sum(arr[c(l,r)]) != 1)
+        flag = TRUE
+
+      if(arr[j] == 1 & sum( arr[c(l,r)] ) == 1)
+        flag = TRUE
+
+    }
+    
+    if(!flag)
+      number.lyer2 = append(number.lyer2, sum(arr))
+}
+
+unique(number.lyer2)
+
+```
+
+### part 3
+
+```{r}
+number.lyer3 = numeric()
+
+for (j in 0:((2^8) - 1)) {
+  brr = as.integer( intToBits(j) )
+
+  if( sum(brr) == 4 ){
+    for(i in 0:((2^8) - 1)){
+      arr = as.integer( intToBits(i) )
+      
+      
+      flag = FALSE
+      for (k in 1:8) {
+        l = k - 1
+        r = k + 1
+        
+        if(l == 0)
+          l = 8
+        
+        if(r == 9)
+          r = 1
+        
+        if(arr[k] == 0 & brr[k] == 0 & sum(arr[c(l,r)]) != 1)
+          flag = TRUE
+        
+        if(arr[k] == 1 & brr[k] == 0 & sum( arr[c(l,r)] ) == 1)
+          flag = TRUE
+  
+        if(arr[k] == 0 & brr[k] == 1  & sum(arr[c(l,r)]) != 2)
+          flag = TRUE
+        
+        if(arr[k] == 1 & brr[k] == 1 & sum( arr[c(l,r)] ) == 2)
+          flag = TRUE
+        
+      }
+      
+      if(!flag)
+        number.lyer3 = append(number.lyer3, sum(arr))
+    }
+  }
+}
+
+unique(number.lyer3)
+
+```

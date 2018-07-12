@@ -1,0 +1,236 @@
+---
+title: "Data Analysis HW6"
+author: "Artin Tajdini 95109983"
+date: "April 12, 2018"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = "",error = F,message = F,
+                      warning = F,fig.width = 10,fig.height = 6,fig.align = "center")
+library(tidyverse)
+library(ggplot2)
+
+house = read_csv("house/train.csv")
+
+```
+
+<div dir="RTL">
+#سؤال ۱
+ماتریس کورلیشن را در می آوردیم سپس با زدن کورلیشن تست دو به دو صحت را بررسی میکنیم(نمودار پی ولیو ها را رسم میکنیم و پیولیو های پایین به معنی ارتباط داشتن دو متغیر است)
+با Hmisc::rcorr کورلیشن تست میزنیم
+</div>
+
+```{r}
+cor( select_if(house, is.numeric), use = "complete.obs" ) %>% 
+  reshape2::melt() %>% 
+  ggplot(aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "gray") +
+  theme(
+    axis.text.x = element_text(angle = 90),
+    panel.grid.major.x=element_blank(),
+    panel.grid.minor.x=element_blank(), 
+    panel.grid.major.y=element_blank(), 
+    panel.grid.minor.y=element_blank()
+  ) +
+  theme(legend.title=element_text(face="bold", size=14)) +
+  scale_y_discrete() +
+  scale_x_discrete(expand = c(0, 0), position = "top")
+
+
+tt = Hmisc::rcorr( as.matrix(select_if(house, is.numeric)) )
+tt$P %>% 
+  reshape2::melt() %>% 
+  ggplot(aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "gray") +
+  theme(
+    axis.text.x = element_text(angle = 90),
+    panel.grid.major.x=element_blank(),
+    panel.grid.minor.x=element_blank(), 
+    panel.grid.major.y=element_blank(), 
+    panel.grid.minor.y=element_blank()
+  ) +
+  theme(legend.title=element_text(face="bold", size=14)) +
+  scale_y_discrete() +
+  scale_x_discrete(expand = c(0, 0), position = "top")
+
+
+  cor( select_if(house, is.numeric), use = "complete.obs" ) %>% 
+  reshape2::melt() %>% filter(Var1 == "SalePrice") %>% 
+  arrange( desc(abs(value)) ) %>%
+  slice(1:11) %>% .$Var2 -> c1
+  c1
+
+```
+
+<div dir="RTL">
+#سوال ۲
+از این ۵۵ نمودار میابیم که بعضی از متغیر ها با اینکه همبستگی دارند اما ارتباطشان خطی نیست مانند قیمت و overalQual
+</div>
+
+```{r}
+select_if(house, is.numeric) %>% select(c1) -> house1
+car::scatterplotMatrix(house1)
+```
+
+<div dir="RTL">
+#سوال ۳
+</div>
+
+```{r}
+lin = lm(formula = SalePrice ~ OverallQual + GrLivArea + GarageCars 
+              + GarageArea + TotalBsmtSF + `1stFlrSF` 
+              + FullBath + TotRmsAbvGrd + YearBuilt + YearRemodAdd, data = house1)
+
+summary(lin)
+
+```
+
+<div dir="RTL">
+#سوال ۴
+
+نمودار قیمت واقعی بر قیمت تخمینی را میکشیم مدل خطی بینشان باید به خط 
+y = x 
+نزدیک باشد
+</div>
+
+```{r}
+house1 %>% mutate( PPrice = fitted(lin)) %>% 
+  ggplot(aes(x = SalePrice, y = PPrice)) + geom_point() + geom_smooth(method = "lm", se = F) + geom_abline(slope = 1, intercept = 0, color = "red")
+
+```
+
+<div dir="RTL">
+#سوال ۵
+</div>
+
+```{r}
+summary(lin)$`r.squared`
+summary(lin)$fstatistic
+
+```
+
+<div dir="RTL">
+مقدار
+r-squared
+نسبت به تعداد داده که ۱۴۶۰ است نزدیک به صفر است بنابراین نشان دهنده نزدیک بودن آن به صفر و خوب بودن آن است
+
+همچنین
+f statistic
+واریانس داده تقسیم بر واریانس خطا رو نشان میدهد پس هرچه مقدار آن بیشتر باشد بهتر است و در خلاصه مدل مقدار آن خوب است
+
+</div>
+
+
+
+<div dir="RTL">
+#سوال ۶
+در خلاصه مدل متغیر هایی که پی ولیو بیشتر از 0.05 دارند را حذف میکنیم زیرا فرض صفر یعنی مربوط نبودن آنها به قیمتها رد نشده و میبینیم که مقدار 
+f statistic
+بیشتر شد بنابراین مدل بهتر شده است
+</div>
+
+```{r}
+fixed_lm = lm(formula = SalePrice ~ OverallQual + GrLivArea + GarageCars +
+                TotalBsmtSF + `1stFlrSF` +
+                FullBath + YearBuilt + YearRemodAdd, data = house1)
+
+
+summary(fixed_lm)
+
+```
+
+
+<div dir="RTL">
+#سوال ۷
+</div>
+
+```{r}
+acf(fixed_lm$residuals)
+```
+
+<div dir="RTL">
+بعد از خط اول نمودار به نزدیک صفر سقوط میکند بنابراین شرط independence
+برقرار است.
+</div>
+
+```{r}
+par(mfrow=c(2,2))
+plot(fixed_lm)
+```
+
+<div dir="RTL">
+برای برقرار بودن شرط 
+Constant Variance
+باید دونمودار سمت چپ نزدیک به خط محور x باشند اما نمودار پایین چپ این خاصیت را ندارد
+
+برای برقرار بودن شرط نرمال بودن باید در نمودار بالا راست نقاط روی خط قرار بگیرند که این اتفاق نیز نمی افتد
+</div>
+
+
+<div dir="RTL">
+#سوال ۸
+
+همینطور که میبینیم میزان خطا از تخمین بسیار بالاست
+</div>
+
+```{r}
+index = sample(x= 1:nrow(house1),size = 0.8*nrow(house1),replace = F)
+train = house1[index,] 
+test =  house1[-index,]
+
+model_lm = lm(SalePrice ~ OverallQual + GrLivArea + GarageCars +
+                TotalBsmtSF + `1stFlrSF` +
+                FullBath + YearBuilt + YearRemodAdd, data = train)
+# prediction
+train$prediction = predict( model_lm, newdata = train, type = "response" )
+test$prediction  = predict( model_lm, newdata = test , type = "response" )
+
+mean( (test$SalePrice - test$prediction) ** 2)
+
+```
+
+<div dir="RTL">
+#سوال ۹
+از نگاه کردن به نمودارهای سوال ۲ میابیم که ارتباط میان قیمت و overalQual خطی نیست
+بلکه توان دو است بنابراین در دیتا به توان دو میرسانیم تا خطی شود
+</div>
+
+```{r}
+house1$OverallQual = house1$OverallQual ** 2
+finalfit = lm(formula = SalePrice ~ OverallQual + GrLivArea + GarageCars +
+                TotalBsmtSF + `1stFlrSF` +
+                FullBath + YearBuilt + YearRemodAdd, data = house1)
+
+summary(finalfit)
+
+```
+
+<div dir="RTL">
+#سوال ۱۰
+4649
+new
+Artin Tajdini
+Artin Tajdini
+0.46281
+1
+now
+Your Best Entry 
+Your submission scored 0.46281, which is not an improvement of your best score. Keep trying!
+</div>
+
+```{r}
+test = read_csv("house/test.csv")
+test[is.na(test)] = 0
+
+
+test %>% 
+  mutate(SalePrice = predict(finalfit, test), type = "response") %>% 
+  select(Id, SalePrice) %>% 
+  write_csv("house/lm.csv")
+
+```

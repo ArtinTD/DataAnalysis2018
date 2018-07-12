@@ -1,0 +1,289 @@
+---
+title: "Data Analysis Homework 2"
+author: "Artin Tajdini 95109983"
+date: "February 18, 2018"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+```{r, include=FALSE}
+library(readr)
+library(ggplot2)
+library(ggthemes)
+library(dplyr)
+
+mobile = read_csv("mobile_data.csv")
+
+knitr::opts_chunk$set(echo = TRUE,comment = "",error = F,message = F,
+                      warning = F,fig.width = 10,fig.height = 6,fig.align = "center")
+```
+
+<div dir="RTL">
+#سؤال ۱
+
+ابتدا بر اساس کمپانی گروه میکنیم
+و تعداد هرکدام را در یک متغیر میریزیم و براساس این متغیر مرتب میکنیم و ۲۰ تای اول را ذخیره میکنیم
+
+</div>
+
+```{r, fig.height = 10, fig.width = 15}
+mobile %>%
+  group_by(company) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count) ) %>%
+  top_n(20) -> p1
+
+p1$company = factor(p1$company, levels = p1$company)
+ggplot(data = p1, aes(x = company, y = count)) +
+  geom_bar(fill = "tomato", stat = "identity") +
+  ggtitle("top 20 mobile making companies") +
+  theme_solarized_2()
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۲
+
+چون سالها گسسته اند پس ممکن است چند نقطه در نمودار روی هم بیفتد که با استفاده از 
+geom_count
+نمایش این نقاط بهتر میشود
+</div>
+```{r}
+ggplot(data = mobile, aes(x = year, y = dim_length)) +
+  theme_hc() + geom_count(col = "tomato") +
+  geom_smooth(method = "lm", se = F) +
+  ggtitle("change of mobile length in years") +
+  xlab("year") +
+  ylab("length")
+ggplot(data = mobile, aes(x = year, y = dim_breadth)) +
+  theme_hc() + geom_count(col = "tomato") +
+  geom_smooth(method = "lm", se = F) +
+  ggtitle("change of mobile breadth in years") +
+  xlab("year") +
+  ylab("breadth")
+
+ggplot(data = mobile, aes(x = year, y = dim_thickness)) +
+  theme_hc() + geom_count(col = "tomato") +
+  geom_smooth(method = "lm", se = F) +  
+  ggtitle("change of mobile thickness in years") +
+  xlab("year") +
+  ylab("thickness")
+
+
+ggplot(data = mobile, aes(x = year, y = cam_px)) +
+  theme_hc() + geom_count(col = "tomato") +
+  geom_smooth(method = "lm", se = F) +
+  ggtitle("change of mobile's camera quality in years") +
+  xlab("year") +
+  ylab("camera pixel")
+
+```
+
+
+***
+
+<div dir="RTL">
+#سؤال ۳
+
+برحسب LTE
+و تعداد سیمکارت گروهبندی میکنیم و میانگین قیمت هرکدام را حساب میکنیم
+</div>
+
+```{r}
+mobile %>%
+  group_by(sim_no, LTE) %>%
+  summarise(avrprice = mean(price, na.rm = T)) -> d3
+
+ggplot(data = d3, aes(x = sim_no, y = avrprice, fill = LTE)) + theme_economist() + 
+  geom_bar(stat = "identity", position = "dodge") +
+  xlab("number of SIM") + ylab("price average")
+
+```
+
+****
+
+<div dir="RTL">
+#سؤال ۴
+</div>
+
+```{r}
+ggplot(data = filter(mobile, year == 2017), aes(x = audio_jack, y = dim_thickness)) +
+  geom_boxplot(na.rm = T) + theme_excel() +
+    xlab("audio jack") + ylab("thickness")
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۵
+
+ppi یعنی تراکم پیکسل در یک اینچ مربع
+
+ابتدا با استفاده
+از aspect 
+طول و عرض صفحه نمایش را حساب میکنیم.
+سپس با تقسیم تعداد پیکسلها بر طول و عرض و رادیکال گرفتن ppi را حساب میکنیم.
+</div>
+
+```{r}
+mobile$scr_row = (mobile$display_size^2 / (mobile$aspect_col^2 + mobile$aspect_row^2) * mobile$aspect_col^2)^0.5
+mobile$scr_col = (mobile$display_size^2 / (mobile$aspect_col^2 + mobile$aspect_row^2) * mobile$aspect_row^2)^0.5
+
+mobile$ppi = (mobile$px_col * mobile$px_row / (mobile$scr_col * mobile$scr_row))^0.5
+
+ggplot(data = mobile, aes(x = ppi)) + geom_histogram(binwidth = 15, na.rm = T, fill = "blue")
+
+mobile %>%
+  filter(!is.na(ppi)) %>%
+  group_by(year) %>%
+  summarise(avrppi = mean(ppi, na.rm = T)) -> d5
+
+ggplot(data = d5, aes(x = year, y = avrppi)) + geom_point() + geom_line() + ylab("average ppi")
+
+mobile[ which.max(mobile$ppi), ] %>% 
+  select(company, device, price, ppi)
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۶
+
+گوشکوبیت یک گوشی یعنی یک گوشی ای که چگالی نسبتا بالا و ضخامت بالا دارد.
+همچنین چون این گوشیها قدیمی اند صفحه نمایششان کوچک است.
+تبلت ها و ساعت ها را نیز حذف میکنیم.
+</div>
+
+```{r, fig.width = 12}
+mobile %>%
+  filter(dim_length <= 150 & dim_length >= 50) %>%
+  mutate(gushkub = weight * dim_thickness / (dim_breadth^0.5 * dim_length^0.5 * display_size)) %>% 
+  arrange( desc( gushkub )) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(x = reorder(device, -gushkub), y = gushkub)) + geom_bar(stat = "identity") + theme_solarized_2() +
+  xlab("device")
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۷
+
+برای اینکه گوشی در آب غرق نشود باید چگالیاش از آب کمتر باشد پس چگالی گوشیها را حساب میکنیم و هیستوگرام آنهایی 
+باشان کمتر از یک است را میکشیم
+و با یک خط از بقیه جدا میکنیم
+(بر حسب گرم بر سانتیمتر مکعب)
+</div>
+
+```{r}
+mobile %>%
+  filter(weight / (dim_length * dim_breadth * dim_thickness * 1e-3) <= 3) %>%
+  ggplot(., aes( x = weight / (dim_length * dim_breadth * dim_thickness * 1e-3))) +
+  xlab("density") +
+  geom_histogram() + geom_vline(xintercept = 1, col = "red", size = 2)
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۸
+</div>
+
+```{r}
+ggplot(mobile[ which( !is.na(mobile$weight) & !is.na(mobile$battery_mah) ),], 
+       aes(x = weight, y = battery_mah)) +
+  geom_point(col = "green") +
+  geom_smooth(method = "lm", se = F) +
+  ylab("battery life")
+
+cor(mobile$weight, mobile$battery_mah, use = "complete.obs")
+
+```
+
+
+***
+
+<div dir="RTL">
+#سؤال ۹
+
+ابتدا تبلتها و ساعتها را حذف میکنیم سپس پرچمدار یعنی گرانترین گوشی درهر سال را در میاوریم
+</div>
+
+```{r}
+mobile %>% 
+  filter(company == "Apple" & dim_length <= 160 & dim_length >= 50) %>% 
+  group_by(year) %>% 
+  filter(price >= max(price, na.rm = T) ) %>%
+  ggplot(., aes(x = year, y = price, col = device)) + geom_point(size = 4) + geom_line(col = "black") + theme_light() 
+
+```
+
+
+***
+
+<div dir="RTL">
+#سؤال ۱۰
+
+## میانگین قیمت گوشیها برحسب سال
+
+این نمودارنشان میدهد که وقتی موبایل فراگیرتر شد قیمتش به مرور کاهش یافت تا سال ۲۰۱۱ که گوشیهای هوشمند شروع به فراگیر شدن کردند و با قابلیتهای بیشتر هر سال میانگین قیمت گوشیها بالا رفته است.
+پیشبینی میشود در چند سال آینده باز قیمت گوشیها شروع به کاهش کند
+</div>
+
+```{r}
+mobile %>% 
+  filter(year < 2017, year > 2003) %>% 
+  group_by(year) %>% 
+  summarise(s = mean(price, na.rm = T)) %>% 
+  ggplot(aes(x = year, y = s)) + geom_bar(stat = "identity") + ylab("average price")
+```
+
+
+<div dir = "RTL">
+## لاغر شدن گوشیها در گذر زمان!
+
+نمودار طول موبایل نسبت به ضخامت آن دربازه زمانی ۱۹۹۸ تا ۲۰۰۵ (جز ۲۰۰۲ که دیتایش اشتباه بود)
+در میابیم که ابتدا گوشیهای با طول بیشتر ضخامت بیشتری داشتند اما به مرور زمان کورلیشنشان منفی میشود و گوشیهای بلند تر ضخامت کمتری دارند
+</div>
+
+```{r}
+mobile$year = as.character(mobile$year)
+mobile %>% 
+  filter(year <= 2005 & year >= 1998 & year != 2002) %>% 
+  ggplot(aes(x = dim_length, y = dim_thickness, col = year)) + geom_point() + geom_smooth(aes(group = year), method = "lm", se = F) + facet_grid(~year)
+
+```
+
+
+<div dir = "RTL">
+## درصد احاطه سیستم عامل ها به بازار در طول زمان
+
+ابتدا احاطه میکروسافت سپس سیمبین و بمرور سایه اندروید بر بازار
+</div>
+
+```{r}
+
+mobile$year = as.integer(mobile$year)
+
+mobile %>%
+  filter(!is.na(os_type) & !is.na(year) & os_type != "other") %>% 
+  group_by(os_type, year) %>% 
+  summarise(count = n()) %>%
+  select(os_type, year, count) -> cm
+
+cm %>% 
+  group_by(year) %>% 
+  summarise(yearcnt = sum(count)) -> cym
+
+cc = full_join(cm, cym)
+
+ggplot(cc, aes(x = year, y = (count / yearcnt), col = os_type)) + geom_line()
+
+```

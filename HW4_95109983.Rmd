@@ -1,0 +1,306 @@
+---
+title: "Data Analysis HW4"
+author: "Artin Tajdini 95109983"
+date: "March 9, 2018"
+output:   
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = "",error = F,message = F,
+                      warning = F,fig.width = 10,fig.height = 6,fig.align = "center")
+library(tidyverse)
+library(highcharter)
+library(tidyr)
+
+```
+
+
+```{r}
+school = read_rds("D:/Downloads/Data tims/bcg.rds") # school background
+student = read_rds("D:/Downloads/Data tims/bsg.rds") # student background
+teacher = read_rds("D:/Downloads/Data tims/btm.rds") # Teacher background
+stresult = read_rds("D:/Downloads/Data tims/bsa.rds") # strudent result
+stt = read_rds("D:/Downloads/Data tims/bst.rds") # student-teacher linkage
+country = read_rds("D:/Downloads/Data tims/bsr.rds") # within-country
+```
+
+<div dir="RTL">
+#سؤال ۱
+
+ابتدا داده رضایت معلم دانشآموز با نمره دانشآموز را داخل یک جدول میریزیم.
+سپس با فرض صفر یکی بودن نمرهها در همه حالات تست آنوا میزنیم و فرض صفر رد میشود پس رضایت معلم بر نمره دانشآموز تاثیر دارد.(نوع تاثیر خواسته نشدهاست اما از نمودار میتوان حدس زد که معلمانی که راضیاند اما نه خیلی بهترین نمرات را دارند.)
+</div>
+
+
+```{r}
+full_join(
+teacher %>% 
+  select(idteach, idcntry, satic = btbg10b),
+    stt %>% 
+      select(idstud, idcntry, idteach, bsmmat01:bsmmat05),
+  by = c("idcntry", "idteach")
+) %>% mutate(
+  score = bsmmat01 + bsmmat02 + bsmmat03 + bsmmat04 + bsmmat05 
+    ) %>% 
+  distinct %>% 
+  filter(!is.na(satic)) -> d1
+
+hcboxplot(x = as.numeric(d1$score), var = as.character(d1$satic), name="Length",color="tomato")
+
+d1 %>% 
+  aov(satic ~ score, data = .) %>% 
+  summary.aov()
+```
+
+
+<div dir="RTL">
+#سؤال ۲
+
+نمرات دانشآموزان را برحسب تحصیلات والدین گروه میکنیم و با فرض صفر یکی بودن آنوا میزنیم و رد میشود.
+پس تاثیر دارد و حال بین بیشترین میزان و کمترین میزان تحصیلات والدین تیتست یکطرفه میزنیم و با رد شدن آن میابیم که تحصیلات والدین تاثیر مثبت دارد.
+</div>
+
+
+```{r, warning = F, message=F}
+student %>% 
+  select(idstud, idcntry, bsmmat01:bsmmat05, paredu = bsdgedup) %>%
+  mutate(score = bsmmat01 + bsmmat02 + bsmmat03 + bsmmat04 + bsmmat05) %>% 
+  filter(!is.na(paredu), paredu != 6) -> d2
+
+d2 %>% 
+  ggplot(aes(x = as.factor(paredu), y = score, fill = as.factor(paredu))) +
+  geom_boxplot()
+  
+  
+d2 %>% 
+  aov(score ~ paredu, data = .) %>% 
+  summary()
+
+d2 %>% 
+  spread(paredu, score) %>%  
+  t.test(.$"1", .$"5", data = ., alt = "greater")
+```
+
+
+<div dir="RTL">
+#سؤال ۳
+
+برای پیداکردن مقدار امکانات رفاهی مقدار ۱۱ سؤال مربوط به امکانات را جمع میزنیم
+سپس با فرض صفر کورلیشن کمتر مساوی صفرکورلیشن تست میزنیم و رد میشود پس ارتباط مستقیم دارند
+</div>
+
+
+```{r}
+student %>% 
+  select(idstud, idcntry, bsmmat01:bsmmat05, bsbg06a:bsbg06k) %>% 
+  mutate( score = rowSums(.[3:7], na.rm = T),
+          possess = 22 - rowSums(.[8:18], na.rm = T)) %>% na.omit() -> d3
+
+d3 %>% 
+  ggplot(., aes(x = score, fill = as.factor(possess))) + geom_density(alpha = 0.2)
+
+d3 %>% 
+  cor.test(~ score + possess, alternative = "greater", data = .)
+
+```
+
+
+<div dir="RTL">
+#سؤال ۶
+
+با فرض صفر بهتر بودن پسرها در هندسه تیتست میزنیم و چون پیولیو خیلی کم است رد میشود.
+</div>
+
+
+```{r}
+stresult %>% 
+  select(idstud, idcntry, bsmgeo01:bsmgeo05, itsex) %>%
+  mutate(geom = bsmgeo01 + bsmgeo02 + bsmgeo03 + bsmgeo04 + bsmgeo05) -> d6
+
+t.test(geom~itsex, data = d6, alt = "greater")
+
+d6 %>% 
+  group_by(itsex) %>% 
+  summarise(avrgeom = mean(geom)) %>% 
+  hchart(., hcaes(x = itsex, y = avrgeom), type = "column") %>% 
+  hc_xAxis(categories = c("", "female", "male"))
+```
+
+
+<div dir="RTL">
+#سؤال ۷
+
+یادگیری ۴ حالت دارد و صبحانه خوردن نیز ۴ حالت پس هردو گسسته هستند و تست Chi-square
+میزنیم با فرض صفر مستقل بودن این دو متغیر از هم که چون پی ولیو بسیار کم است رد میشود
+</div>
+
+```{r}
+student %>% 
+  select(idstud, idcntry, learn = bsbg15g, eat = bsbg12) %>% 
+  na.omit() %>% 
+  group_by(learn, eat) %>% 
+  summarise(count = n()) %>% 
+  spread(eat, count) -> d7
+
+d7 %>% .[,-1] %>% as.matrix() %>% chisq.test()
+d7 %>% select(learn, a = "1", b = "2", c = "3", d = "4") %>%
+  mutate(a = a / sum(.$a),
+         b = b / sum(.$b),
+         c = c / sum(.$c),
+         d = d / sum(.$d)) %>% 
+  .[,-1] %>% as.matrix() %>% hchart() %>% 
+  hc_colorAxis(stops = color_stops())
+
+```
+
+<div dir="RTL">
+#سؤال ۹
+
+نمرات را برحسب میزان غیبت گروه میکنیم و با فرض صفر یکی بودن گروهها آنوا میزنیم و بحاطر اختمال کم رد میشود پس دو متغیر روی هم تاثیر دارند.
+برای پیدا کردن جهت تاثیر کورلیشن تست میزنیم که غیبت تاثیر مثبت دارد و این فرض صفر بخاطر پی ولیو بیسیار کم رد میشود پس تاثیر منفی دارد.
+</div>
+
+```{r}
+student %>% 
+  select(idstud, idcntry, bsmmat01:bsmmat05, absent = bsbg11) %>%
+  mutate(score = bsmmat01 + bsmmat02 + bsmmat03 + bsmmat04 + bsmmat05) -> d9
+
+  d9 %>% filter(!is.na(absent)) %>% 
+    ggplot(aes(x = as.factor(absent), y = score, fill = as.factor(absent))) +
+    geom_boxplot()
+
+  d9 %>% 
+  aov(score ~ absent, data = .) %>% 
+  summary.aov()
+
+  d9 %>% filter(!is.na(absent)) %>% 
+    cor.test(~ score + absent, alternative = "greater", data = .)
+
+```
+
+
+<div dir="RTL">
+#سؤال ۱۰
+
+با فرض صفر بهتر بودن استدلالی تی تست میزنیم و رد میشود پس بهتر نیست
+</div>
+
+
+```{r}
+student %>% filter(idcntry == 364) %>%
+  select(idstud, bsmapp01:bsmapp05, bsmrea01:bsmrea05) %>% 
+  mutate( apply = rowSums(.[2:6], na.rm = T),
+          reason = rowSums(.[7:11], na.rm = T) ) %>%
+  t.test(.$apply, .$reason, data = .)
+
+student %>% filter(idcntry == 364) %>%
+  select(idstud, bsmapp01:bsmapp05, bsmrea01:bsmrea05) %>% 
+  mutate( apply = rowSums(.[2:6], na.rm = T),
+          reason = rowSums(.[7:11], na.rm = T) ) -> d10
+
+hchart(density(d10$apply), area = TRUE) %>% hc_add_series(density(d10$reason), area = TRUE)
+
+```
+
+<div dir="RTL">
+# سه گزاره جالب
+
+#تاثیر اذیت شدن دانشآموز توسط بقیه روی نمراتش
+
+گروه میکنیم و آنوا میزنیم و میابیم که گروهها یکی نیستند چون فرض صفر آنوا رد شده است
+سپس بین گروه اول و آخر تیتست میزنیم و میابیم ارتباط طبق انتظار منفی است
+</div>
+
+```{r}
+student %>% 
+  select(idstud, idcntry, bsmmat01:bsmmat05, bully = bsdgsb) %>%
+  mutate(score = bsmmat01 + bsmmat02 + bsmmat03 + bsmmat04 + bsmmat05) %>% 
+  filter(!is.na(bully)) -> d11
+
+d11 %>% 
+  ggplot(., aes(x = score, fill = as.factor(bully))) + geom_density(alpha = 0.4)
+
+
+d11 %>% 
+  aov(score ~ bully, data = .) %>% 
+  summary()
+
+d11 %>% 
+  spread(bully, score) %>%  
+  t.test(.$"1", .$"3", data = ., alt = "greater")
+
+```
+
+
+<div dir="RTL">
+# تاثیر اعتماد به نفس در زیست روی نمرات ریاضی!!
+
+آنوا میزنیم و میبینیم که یکی نیستند گروهها بر حسب اعتماد به نفس سپس کورلیشن تست میزنیم و میبینیم تاثیر مثبت دارد
+</div>
+
+
+```{r}
+student %>% 
+  select(idstud, idcntry, bsmmat01:bsmmat05, conf = bsdgscb) %>%
+  mutate(score = bsmmat01 + bsmmat02 + bsmmat03 + bsmmat04 + bsmmat05) %>% 
+  filter(!is.na(conf)) -> d12
+
+d12 %>% 
+  ggplot(aes(x = as.factor(conf), y = score, fill = as.factor(conf))) +
+  geom_boxplot()
+
+d12 %>% 
+  aov(score ~ conf, data = .) %>% 
+  summary()
+
+d12 %>% 
+  cor.test(~ score + conf, alternative = "less", data = .)
+```
+
+<div dir="RTL">
+# تاثیر میزان تکلیف بر نمره دانشآموزان
+
+ابتدا آنوا میزنیم و میبینیم که مستقل بودنشان رد نمیشود زیر پی ولیو خیلی کم نیست.
+با فرض اینکهمستقل نباشند بین هر دو تای متوالی تیتست یکطرفه میزنیم و میابیم که بیشترین میانگین را گروه وسط دارد پس تکلیف خیلی کم و خیلی زیاد تاثیر خوبی ندارد.
+</div>
+
+
+
+```{r}
+student %>% 
+  select(idstud, idcntry, bsmmat01:bsmmat05, hw = bsbm38aa) %>%
+  mutate(score = bsmmat01 + bsmmat02 + bsmmat03 + bsmmat04 + bsmmat05) %>% 
+  filter(!is.na(hw)) -> d13
+
+d13 %>% 
+  ggplot(aes(x = as.factor(hw), y = score, fill = as.factor(hw))) +
+  geom_boxplot()
+
+
+d13 %>% 
+  aov(score ~ hw, data = .) %>% 
+  summary()
+
+
+d13 %>% 
+  spread(hw, score) %>%  
+  t.test(.$"1", .$"2", data = ., alt = "greater")
+
+
+d13 %>% 
+  spread(hw, score) %>%  
+  t.test(.$"2", .$"3", data = ., alt = "greater")
+
+d13 %>% 
+  spread(hw, score) %>%  
+  t.test(.$"3", .$"4", data = ., alt = "greater")
+
+d13 %>% 
+  spread(hw, score) %>%  
+  t.test(.$"4", .$"5", data = ., alt = "greater")
+
+```

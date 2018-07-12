@@ -1,0 +1,353 @@
+---
+title: "Data Analysis Homework 3"
+author: "Artin Tajdini 95109983"
+date: "February 26, 2018"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = "",error = F,message = F,
+                      warning = F,fig.width = 10,fig.height = 6,fig.align = "center")
+library(engsoccerdata)
+library(dplyr)
+library(ggplot2)
+library(highcharter)
+
+data("spain")
+
+spain = as.tbl(spain)
+
+```
+
+```{r}
+rbind(
+  spain %>% 
+    filter(tier == 1, round == "league") %>% 
+    select(Date, season = Season, team = home, opp = visitor, GF = hgoal, GA = vgoal, FT) %>% 
+    mutate(GD = GF - GA),
+  spain %>% 
+    filter(tier == 1, round == "league") %>% 
+    select(Date, season = Season, team = visitor, opp = home, GF = vgoal, GA = hgoal, FT) %>% 
+    mutate(GD = GF - GA)
+) -> cleanspain
+
+```
+
+<div dir="RTL">
+#سؤال ۱
+</div>
+
+```{r}
+cleanspain %>% 
+  group_by(season, team) %>% 
+  summarise(score = 3 * sum(GD > 0) + sum(GD == 0), TGD = sum(GD)) %>% 
+  arrange(desc(score), desc(TGD)) %>% 
+  group_by(season) %>% 
+  slice(1) %>%
+  group_by(team) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(count)) %>% 
+  hchart(type = "column", hcaes(x = team, y = count), name = "number of championships")
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۲
+</div>
+```{r}
+cleanspain %>% 
+  group_by(season) %>% 
+  summarise(draws = sum(GD == 0) / 2, goals = sum(GA, GF) / 2) %>% 
+  arrange(desc(draws / goals)) %>% 
+  slice(1:10) %>%
+  hchart(type = "bar", hcaes(x = as.factor(season), y = (draws / goals)), name = "boreness!")
+
+cleanspain %>% 
+  group_by(team) %>% 
+  summarise(meandraws = sum(GD == 0) / n(), meangoals = sum(GF) / n()) %>% 
+  arrange( desc(meandraws / meangoals) ) %>% 
+  slice(1:10) %>% 
+hchart(type = "bar", hcaes(x = team, y = (meandraws / meangoals)), name = "boreness!")
+
+```
+
+
+***
+
+<div dir="RTL">
+#سؤال ۳
+</div>
+
+```{r}
+full_join(
+  cleanspain %>% 
+    group_by(season) %>% 
+    mutate(gamenum = row_number(Date)) %>% 
+    group_by(season, team) %>% 
+    summarise(score = 3 * sum(GD > 0) + sum(GD == 0), TGD = sum(GD)) %>% 
+    arrange(desc(score), desc(TGD)) %>% 
+    group_by(season) %>% 
+    slice(1),
+  cleanspain %>% 
+    group_by(season) %>% 
+    mutate(gamenum = row_number(Date),
+           totalgame = max(gamenum)) %>% 
+    group_by(season, team) %>% 
+    filter(gamenum <= totalgame / 2) %>% 
+    summarise(HSscore = 3 * sum(GD > 0) + sum(GD == 0), HSTGD = sum(GD)) %>% 
+    arrange(desc(HSscore), desc(HSTGD)) %>% 
+    group_by(season) %>% 
+    slice(1) %>% 
+    select(season, HSteam = team, HSscore),
+  by = "season"
+) %>% 
+  mutate(isEqual = (team == HSteam)) -> p3
+
+sum(p3$isEqual) / dim(p3)[1] 
+
+```
+
+****
+
+<div dir="RTL">
+#سؤال ۴
+</div>
+
+```{r}
+cleanspain %>% 
+  filter(season >= 2001 & season <= 2010) %>% 
+  filter(opp %in% c("Real Madrid", "FC Barcelona", "Atletico Madrid", "Valencia CF", "Sevilla FC") ) %>% 
+  filter(!(team %in% c("Real Madrid", "FC Barcelona", "Atletico Madrid", "Valencia CF", "Sevilla FC") )) %>% 
+  group_by(team) %>% 
+  summarise(wins = sum(GD > 0), draws = sum(GD == 0)) %>% 
+  arrange(desc(wins), desc(draws)) %>% 
+  slice(1:14) %>% 
+  hchart(type = "bar", hcaes(x = team, y = 3 * wins +  draws), name = "points stealen")
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۵
+</div>
+
+```{r}
+cleanspain %>% 
+  group_by(season, team) %>% 
+  mutate(week = row_number(Date), score = 3 * (GD > 0) + (GD == 0)) %>% 
+  select(season, team, week, GF, GA, GD, score) %>% 
+  group_by(season, team) %>% 
+  arrange(week) %>% 
+  mutate(
+    score = cumsum(score),
+    GA = cumsum(GA),
+    GF = cumsum(GF),
+    GD = cumsum(GD),
+    totweeks = max(week)
+  ) %>% group_by(season, week) %>% 
+  arrange(desc(score)) %>% 
+  slice(1:2) %>%
+  summarise(
+    team = first(team),
+    scorediff = max(score) - min(score),
+    totweeks = mean(totweeks)
+  ) %>% 
+  mutate(
+    isChampion = if_else((scorediff > (totweeks - week) * 3), week, as.integer(0))
+  ) %>%
+  filter(isChampion != 0) %>% 
+  group_by(season) %>% 
+  arrange(week) %>% 
+  slice(1) %>%
+  arrange(desc(totweeks - week)) %>%  .[1:2, ]
+
+
+cleanspain %>% 
+  group_by(season, team) %>% 
+  summarise(score = 3 * sum(GD > 0) + sum(GD == 0), TGD = sum(GD)) %>% 
+  arrange(desc(score), desc(TGD)) %>% 
+  group_by(season) %>% 
+  slice(1:2) %>%
+  summarise(
+    team = first(team),
+    scorediff = max(score) - min(score)
+  ) %>% 
+  arrange(desc(scorediff)) %>% 
+  .[1,]
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۶
+</div>
+
+```{r, fig.width = 12}
+cleanspain %>% 
+  group_by(team) %>% 
+  mutate(week = row_number(Date), W = if_else((GD > 0),1,0), D = if_else((GD == 0),1,0), L = if_else((GD< 0),1,0)) %>% 
+  arrange(week) %>% 
+  group_by(team) %>% 
+    mutate(
+    bchange = if_else((W != lag(W)), 1, 0),
+    bchange = if_else(is.na(bchange),0,bchange),
+    totweeks = max(week),
+    block = cumsum(bchange)
+  )  %>%
+  group_by(team, block) %>% 
+  summarise(
+    from = min(Date),
+    to = max(Date),
+    winstrike = if_else((min(W) == 1), n(), as.integer(0))
+  ) %>% 
+  arrange(desc(winstrike)) %>%  .[1:3,]
+
+cleanspain %>% 
+  group_by(team) %>% 
+  mutate(week = row_number(Date), W = if_else((GD > 0),1,0), D = if_else((GD == 0),1,0), L = if_else((GD< 0),1,0)) %>% 
+  arrange(week) %>% 
+  group_by(team) %>% 
+  mutate(
+    bchange = if_else((L != lag(L)), 1, 0),
+    bchange = if_else(is.na(bchange),0,bchange),
+    totweeks = max(week),
+    block = cumsum(bchange)
+  )  %>%
+  group_by(team, block) %>% 
+  summarise(
+    from = min(Date),
+    to = max(Date),
+    drawstrike = if_else((min(L) == 1), n(), as.integer(0))
+  ) %>% 
+  arrange(desc(drawstrike)) %>% .[1:3,]
+
+cleanspain %>% 
+  group_by(team) %>% 
+  mutate(week = row_number(Date), W = if_else((GD > 0),1,0), D = if_else((GD == 0),1,0), L = if_else((GD< 0),1,0)) %>% 
+  arrange(week) %>% 
+  group_by(team) %>% 
+  mutate(
+    bchange = if_else((D != lag(D)), 1, 0),
+    bchange = if_else(is.na(bchange),0,bchange),
+    totweeks = max(week),
+    block = cumsum(bchange)
+  )  %>%
+  group_by(team, block) %>% 
+  summarise(
+    from = min(Date),
+    to = max(Date),
+    losestrike = if_else((min(D) == 1), n(), as.integer(0))
+  ) %>% 
+  arrange(desc(losestrike)) %>% 
+  .[1:3,]
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۷
+</div>
+
+```{r}
+cleanspain %>% 
+  group_by(season, team) %>% 
+  mutate(week = row_number(Date), score = 3 * (GD > 0) + (GD == 0)) %>% 
+  select(season, team, week, GF, GA, GD, score) %>% 
+  group_by(season, team) %>% 
+  arrange(week) %>% 
+  mutate(
+    score = cumsum(score),
+    GA = cumsum(GA),
+    GF = cumsum(GF),
+    GD = cumsum(GD),
+    totweeks = max(week)
+  ) %>% group_by(season, week) %>% 
+  arrange(score) %>% 
+  slice(c(1,4)) %>%
+  summarise(
+    team = first(team),
+    scorediff = max(score) - min(score),
+    totweeks = mean(totweeks)
+  ) %>% 
+  mutate(
+    isLost = if_else((scorediff > (totweeks - week) * 3), week, as.integer(0))
+  ) %>%
+  filter(isLost != 0) %>% 
+  group_by(season) %>% 
+  arrange(desc(totweeks - week)) %>% .[1:3,]
+
+```
+
+***
+
+<div dir="RTL">
+#سؤال ۸
+</div>
+
+```{r}
+cleanspain %>% 
+  filter(season == 1998) %>%
+  group_by(team) %>% 
+  mutate(week = row_number(Date), score = 3 * (GD > 0) + (GD == 0)) %>% 
+  select(team, week, GF, GA, GD, score, Date) %>% 
+  group_by(team) %>% 
+  arrange(week) %>%
+  mutate(
+    score = cumsum(score),
+    GA = cumsum(GA),
+    GF = cumsum(GF),
+    GD = cumsum(GD),
+    totweeks = max(week)
+  ) %>% 
+  group_by(week) %>% 
+  mutate(    
+    rank = n() - row_number(score) + 1
+  ) %>% 
+  hchart(type = "line", hcaes(x = Date, y = rank, group = team)) %>%  hc_yAxis(tickInterval = 1, max = 20, min = 1, reversed = T)
+
+```
+
+
+***
+
+<div dir="RTL">
+#سؤال ۹
+</div>
+
+```{r}
+
+spain %>% 
+  filter(Season == 2012) %>% 
+  ggplot(aes(visitor, reorder(as.factor(home), desc(home)))) +
+  geom_tile(fill = "gray") +
+  geom_text(aes(label = .$FT))+
+  theme(
+    axis.text.x = element_text(angle = 90),
+    panel.grid.major.x=element_blank(),
+    panel.grid.minor.x=element_blank(), 
+    panel.grid.major.y=element_blank(), 
+    panel.grid.minor.y=element_blank()
+  ) +
+  theme(legend.title=element_text(face="bold", size=14)) +
+  scale_y_discrete() +
+  scale_x_discrete(expand = c(0, 0), position = "top") +
+  ylab("home")
+  
+
+```
+
+
+***
+
+<div dir="RTL">
+#سؤال ۱۰
+
+</div>

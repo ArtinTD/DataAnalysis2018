@@ -1,0 +1,254 @@
+---
+title: "Data Analysis HW7"
+author: "Artin Tajdini 95109983"
+date: "April 28, 2018"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = "",error = F,message = F,
+                      warning = F,fig.width = 10,fig.height = 6,fig.align = "center")
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(data.table)
+
+source("unbalanced_functions.R")
+
+```
+
+```{r}
+death1 = read_csv("data7/murder_suicide.csv")
+
+death1 = death1 %>% unclass %>% data.frame()
+death = death1
+death[] = lapply(death1[], as.numeric)
+
+```
+
+<div dir="RTL">
+#سؤال ۱
+ابتدا کل داده را numeric
+میکنیم تا بتوان ماتریس هم بستگی را بدست آورد.
+سپس داده حجو را از داده حذف میکنیم(مبنای حذف بین چند ریکد نگهداشتن ستونیست که بیشترین همبیستگی را با ستون مرگ یا خودکشی دارد)
+سپس با کتابخانه cars نمودار همبستگی دو به دو رسم میشود
+(به دلیل زمانبر بودن دستور اجرا نشده است)
+</div>
+
+```{r}
+death %>% select( -c(AgeRecode12, AgeRecode52, InfantCauseRecode130,
+                     Age, Education1989Revision, AgeType, CurrentDataYear,
+                     CauseRecode358, CauseRecode113, InfantAgeRecode22, 
+                     Race, RaceRecode5, HispanicOriginRaceRecode, 
+                     AgeSubstitutionFlag) ) -> death
+
+cor( death, use = "complete.obs") %>% 
+  reshape2::melt() %>% 
+  ggplot(aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "gray") +
+  theme(
+    axis.text.x = element_text(angle = 90),
+    panel.grid.major.x=element_blank(),
+    panel.grid.minor.x=element_blank(), 
+    panel.grid.major.y=element_blank(), 
+    panel.grid.minor.y=element_blank()
+  ) +
+  theme(legend.title=element_text(face="bold", size=14)) +
+  scale_y_discrete() +
+  scale_x_discrete(expand = c(0, 0), position = "top")
+
+```
+
+```{r, eval = F}
+car::scatterplotMatrix(death)
+```
+
+<div dir="RTL">
+#سوال ۲
+از آنجایی که داده گسسته است پس برای بررسی مرتبط بودن از آزمون فرض 
+chi square test of independence
+استفاده میکنیم و
+میابیم که تمام متغیر های گفته شده مرتبطند.
+</div>
+
+```{r}
+#race
+death %>% select(MannerOfDeath, RaceRecode3) %>% 
+  na.omit() %>% 
+  group_by(MannerOfDeath, RaceRecode3) %>% 
+  summarise(cnt = n()) %>% 
+  tidyr::spread(RaceRecode3, cnt) %>% .[,-1] %>% 
+  as.matrix() %>% chisq.test()
+
+#age
+death %>% select(MannerOfDeath, AgeRecode27) %>% 
+  na.omit() %>% 
+  group_by(MannerOfDeath, AgeRecode27) %>% 
+  summarise(cnt = n()) %>% 
+  tidyr::spread(AgeRecode27, cnt) %>% .[,-1] -> d
+
+d[is.na(d)] = 0
+d %>% as.matrix() %>% chisq.test()
+
+#sex
+death %>% select(MannerOfDeath, Sex) %>% 
+  na.omit() %>% 
+  group_by(MannerOfDeath, Sex) %>% 
+  summarise(cnt = n()) %>% 
+  tidyr::spread(Sex, cnt) %>% .[,-1] %>% 
+  as.matrix() %>% chisq.test()
+
+#edu
+death %>% select(MannerOfDeath, Education2003Revision) %>% 
+  na.omit() %>% 
+  group_by(MannerOfDeath, Education2003Revision) %>% 
+  summarise(cnt = n()) %>% 
+  tidyr::spread(Education2003Revision, cnt) %>% .[,-1] %>% 
+  as.matrix() %>% chisq.test()
+
+#method
+death %>% select(MannerOfDeath, MethodOfDisposition) %>% 
+  na.omit() %>% 
+  group_by(MannerOfDeath, MethodOfDisposition) %>% 
+  summarise(cnt = n()) %>% 
+  tidyr::spread(MethodOfDisposition, cnt) %>% .[,-1] %>% 
+  as.matrix() %>% chisq.test()
+
+```
+
+<div dir="RTL">
+#سوال ۳
+
+ابتدا خودکشی بودن یا نبودن را به ۰ و ۱ میبریم
+سپس glm میزنیم 
+با نمودار مدل را ارزیابی میکنیم
+متغیر های با pvalue زیاد را حذف میکنیم
+و با آزمون هسلم میابیم که تخمین خوبی زده ایم زیرا pvalue آن بسیار کم است.
+</div>
+
+```{r}
+death %>% mutate(murder = MannerOfDeath - 2) %>% select(-MannerOfDeath) -> death
+
+mylogit = glm(formula = murder ~ ., data = death, family = "binomial")
+summary(mylogit)
+
+library(boot)
+glm.diag.plots(mylogit, glmdiag = glm.diag(mylogit))
+
+
+rdeath = death %>% select( -c(MonthOfDeath, DayOfWeekOfDeath, BridgedRaceFlag) )
+mylogit = glm(formula = murder ~ ., data = rdeath, family = binomial(link = 'logit'))
+
+library(ResourceSelection)
+hoslem.test(death$murder, fitted(mylogit))
+
+```
+
+<div dir="RTL">
+#سوال ۴
+</div>
+
+```{r}
+death %>% mutate(pred = fitted(mylogit)) %>% 
+  ggplot(aes(x = AgeRecode27, y = pred, col = murder)) + geom_jitter()
+
+
+ggplot(data = death %>% mutate(pred = predict(mylogit, type = 'response')), aes(x = AgeRecode27, y = murder)) + geom_point() + 
+  geom_line(aes(x = AgeRecode27, y = pred), color = 'red', size = 0.3)
+
+ggplot( data = death %>% mutate(pred = fitted(mylogit)), aes( pred, fill = as.factor(murder))) + 
+  geom_density(size = 1, alpha = 0.5)
+
+```
+
+<div dir="RTL">
+#سوال ۵
+</div>
+
+```{r}
+index = sample(x= 1:nrow(rdeath),size = 0.8*nrow(rdeath),replace = F)
+train = rdeath[index,] 
+test =  rdeath[-index,]
+model_glm = glm(murder ~ ., data = train, family = "binomial")
+# prediction
+train$prediction = predict( model_glm, newdata = train, type = "response" )
+test$prediction  = predict( model_glm, newdata = test , type = "response" )
+
+
+cm_info = ConfusionMatrixInfo( data = test, predict = "prediction", 
+                               actual = "murder", cutoff = .6 )
+cm_info$plot
+
+TP =  sum((test$prediction > 0.5) & (test$murder == 1))
+TP
+TN = sum((test$prediction < 0.5) & (test$murder == 0))
+TN
+FP = sum((test$prediction > 0.5) & (test$murder == 0))
+FP
+FN = sum((test$prediction < 0.5) & (test$murder == 1))
+FN
+P = TP + FP
+P
+N =  TN + FN
+N
+ACC = (TP+TN)/(P+N)
+ACC
+FPR = 1- TN/N
+FPR
+TPR = TP/P
+TPR
+
+```
+
+
+
+<div dir="RTL">
+#سوال ۶
+با توجه به نمودار میابیم که پارامتر قطع ۰.۵۵ بالاترین صحت را دارد
+</div>
+
+```{r}
+accuracy_info = AccuracyCutoffInfo( train = train, test = test, predict = "prediction", actual = "murder" )
+accuracy_info$plot
+
+```
+
+
+<div dir="RTL">
+#سوال ۷
+</div>
+
+```{r}
+cost_fp = FP; cost_fn = FN
+roc_info = ROCInfo( data = cm_info$data, predict = "predict", 
+                    actual = "actual", cost.fp = cost_fp, cost.fn = cost_fn )
+grid.draw(roc_info$plot)
+
+```
+
+<div dir="RTL">
+#سوال ۸
+
+به علت حجم بالا پکیج کد آنرا بدون اجرا کردن نشان میدهیم!!!
+</div>
+
+```{r, eval=F}
+library(h2o)
+h2o.init()
+hdeath = as.h2o(rdeath)
+c2 = colnames(rdeath)
+chglm = h2o.glm(y = "murder", x= c2[c2 != "murder"],
+                training_frame = hms, family="binomial",nfolds = 5)
+chglm
+```
+
+<div dir="RTL">
+#سوال ۹
+بله اگر دیتا به اندازه کافی باشد تا خطای مدلمان به حد کافی کم شود میتوانیم به خروجی مدل اتکا کنیم اگرچه در این مورد باید پارامتر قطع بطوری باشد که خطای نوع اول(خودکشی را قتل تشخیص دادن)
+کمینه شود
+</div>
+

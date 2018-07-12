@@ -1,0 +1,423 @@
+---
+title: "Data Analysis HW9"
+author: "Artin Tajdini 95109983"
+date: "May 19, 2018"
+output: 
+    prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = "",error = F,message = F,
+                      warning = F,fig.width = 10,fig.height = 6,fig.align = "center")
+
+library(stringr)
+library(readr)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+files = 
+  list.files('stock/stock_dfs/', full.names = T)
+
+stocks = list()
+name = character()
+
+for(i in 1:length(files)) {
+  stocks[[i]] = read_csv(files[[i]])
+  name[i] = files[[i]]%>% str_remove("stock/stock_dfs/") %>% str_replace('.csv', '')
+}
+
+mdata = stocks[[1]] %>% mutate(company = name[1])
+for(i in 2:length(stocks)) {
+  mdata = rbind(mdata, stocks[[i]] %>% mutate(company = name[i]))
+  #print(name[i])
+}
+
+constituents = read_csv("stock/constituents.csv")
+
+mdata = left_join(mdata, constituents %>% select(company = Symbol, cn = Name, Sector))
+
+```
+
+
+<p dir="RTL">
+#۱ سوال
+</p>
+
+```{r}
+mdata %>% 
+  mutate(year = lubridate::year(Date)) %>% 
+  group_by(company, year) %>%
+  arrange(Date) %>%
+  summarise(prof = last(`Adj Close`) - first(`Adj Close`)) %>%
+  group_by(company) %>%
+  arrange(desc(prof)) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  arrange(desc(prof)) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(x = reorder(company, -prof), y = prof, fill = as.factor(year))) + geom_col()
+
+mdata %>% 
+  mutate(year = floor(lubridate::year(Date) / 2) * 2 ) %>% 
+  group_by(company, year) %>% 
+  arrange(Date) %>% 
+  summarise(prof = last(`Adj Close`) - first(`Adj Close`)) %>% 
+  group_by(company) %>%
+  arrange(desc(prof)) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  arrange(desc(prof)) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(x = reorder(company, -prof), y = prof, fill = as.factor(year))) + geom_col()
+
+mdata %>% 
+  mutate(year = floor(lubridate::year(Date) / 5) * 5 ) %>% 
+  group_by(company, year) %>% 
+  arrange(Date) %>% 
+  summarise(prof = last(`Adj Close`) - first(`Adj Close`)) %>% 
+  group_by(company) %>%
+  arrange(desc(prof)) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  arrange(desc(prof)) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(x = reorder(company, -prof), y = prof, fill = as.factor(year))) + geom_col()
+
+mdata %>% 
+  mutate(year = lubridate::year(Date)) %>% 
+  group_by(company, year) %>% 
+  arrange(Date) %>% 
+  summarise(prof = last(`Adj Close`) - first(`Adj Close`), Sector = first(Sector)) %>% 
+  group_by(Sector, year) %>%
+  summarise(prof = sum(prof)) %>% 
+  ungroup() %>% 
+  group_by(Sector) %>% 
+  arrange(desc(prof)) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  na.omit() %>% 
+  arrange(desc(prof)) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(x = reorder(Sector, -prof), y = prof, fill = as.factor(year))) + geom_col() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 8, hjust = 1))
+
+
+mdata %>% 
+  mutate(year = floor(lubridate::year(Date) / 2) * 2) %>% 
+  group_by(company, year) %>% 
+  arrange(Date) %>% 
+  summarise(prof = last(`Adj Close`) - first(`Adj Close`), Sector = first(Sector)) %>% 
+  group_by(Sector, year) %>%
+  summarise(prof = sum(prof)) %>% 
+  ungroup() %>% 
+  group_by(Sector) %>% 
+  arrange(desc(prof)) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  na.omit() %>% 
+  arrange(desc(prof)) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(x = reorder(Sector, -prof), y = prof, fill = as.factor(year))) + geom_col() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 8, hjust = 1))
+
+
+mdata %>% 
+  mutate(year = floor(lubridate::year(Date) / 5) * 5) %>% 
+  group_by(company, year) %>% 
+  arrange(Date) %>% 
+  summarise(prof = last(`Adj Close`) - first(`Adj Close`), Sector = first(Sector)) %>% 
+  group_by(Sector, year) %>%
+  summarise(prof = sum(prof)) %>% 
+  ungroup() %>% 
+  group_by(Sector) %>% 
+  arrange(desc(prof)) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  na.omit() %>% 
+  arrange(desc(prof)) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(x = reorder(Sector, -prof), y = prof, fill = as.factor(year))) + geom_col() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 8, hjust = 1))
+
+```
+
+
+<p dir="RTL">
+#۲ سوال
+با آزمون فرض t.test
+میابیم که میانگین سود در روز سیزدهم ماه کمتر از صفر نیست بنابراین این اعتقاد اشتباه است.
+</p>
+
+```{r}
+mdata %>% 
+  mutate(day = lubridate::day(Date)) %>% 
+  filter(day == 13) %>%
+  mutate(lose = Close - Open) %>% 
+  group_by(Date) %>% 
+  summarise(lose = sum(lose)) %>% 
+  ggplot(aes(x = Date, y = lose)) + geom_point() + geom_line() + geom_abline(slope = 0, intercept = 0, col = "red")
+
+mdata %>% 
+  mutate(day = lubridate::day(Date)) %>% 
+  filter(day == 13) %>%
+  mutate(lose = Close - Open) -> thir
+
+t.test(thir$lose, mu = 0, alternative = "less")
+
+```
+
+
+<p dir="RTL">
+#۳ سوال 
+معروف به دوشنبه سیاه که دلایل آن در ویکیپدیا به این صورت نوشته شده است:
+</p>
+
+> Black Monday
+On Monday, August 24, world stock markets were down substantially, wiping out all gains made in 2015, with interlinked drops in commodities such as oil, which hit a six-year price low, copper, and most of Asian currencies, but the Japanese Yen, losing value against the United States Dollar. With the stock market plunge on Monday, an estimated ten trillion dollars had been wiped off the books on global markets since June 3.
+
+```{r}
+mdata %>% 
+  group_by(Date) %>% 
+  summarise(gardesh = sum(Volume* `Adj Close`)) %>% 
+  arrange(desc(gardesh)) %>% 
+  slice(1)
+```
+
+
+<p dir="RTL">
+#۴ سوال 
+</p>
+
+```{r}
+lmresiduals = data.frame()
+index = sample(x= 1:nrow(mdata %>% filter(company == "AAPL")),size = 0.8*nrow(mdata %>% filter(company == "AAPL")),replace = F)
+
+
+for (k in 1:10) {
+  
+  mdata %>% 
+    filter(company == "AAPL") %>% 
+    select(Date, Open) %>% .$Open %>% embed(k + 1) %>% as.data.frame() -> tmp
+
+  train = tmp[index,] 
+  test =  tmp[-index,]
+  
+  l = lm(V1 ~ ., data = train)
+  
+  train$prediction = predict( l, newdata = train, type = "response" )
+  test$prediction  = predict( l, newdata = test , type = "response" )
+  
+  test %>% 
+    mutate(residuals = (prediction - V1)) -> test
+
+  rbind(lmresiduals, data.frame(residual = mean(test$residuals ^ 2, na.rm = T), `k` = k)) ->lmresiduals
+}
+
+lmresiduals %>% 
+  ggplot(aes(x = k, y = residual)) + geom_line()
+
+lmresiduals %>% 
+  arrange(residual) %>% slice(1)
+
+```
+
+
+<p dir="RTL">
+#۵ سوال
+</p>
+
+```{r}
+stocks[[1]] %>% select(Date, Open) -> tmp
+colnames(tmp)[2] = name[1]
+
+data = tmp 
+for(i in 2:length(stocks)) {
+  stocks[[i]] %>% select(Date, Open) -> tmp
+  colnames(tmp)[2] = name[i]
+  
+  data = full_join(data, tmp)
+}
+
+
+pca = prcomp(data %>% select(-Date) %>% na.omit())
+
+plot(summary(pca)$importance[3,], type="l",
+     ylab="%variance explained", xlab="nth component (decreasing order)")
+abline(h=0.8719,col="red");abline(v = 3,col="red",lty=3)
+
+
+vars = pca$sdev^2
+sum(vars[1:3])/sum(vars)
+
+```
+
+
+<p dir="RTL">
+#۶ سوال
+همانطور که میبینیم جهت های بخش مختلف در نمودار ضرب داخلی مثبت دارند
+بنابراین میابیم که اگر در روزی قیمت سهام شرکت های بخش خاصی زیاد شود قیمت سهام دیگر بخش ها نیز زیاد میشود
+</p>
+
+```{r}
+mdata %>% 
+  group_by(Sector, Date) %>% 
+  summarise(Open = mean(Open)) %>% 
+  na.omit() %>% 
+  tidyr::spread(Sector, Open) -> d6
+
+library(ggbiplot)
+pca6 = prcomp( d6 %>% select(-Date) %>% na.omit() , scale. = TRUE)
+
+ggbiplot(pca6, obs.scale = 1, var.scale = 1, ellipse = TRUE, circle = TRUE, alpha = 0.3) +
+  scale_color_discrete(name = '') +
+  theme(legend.direction = 'horizontal', legend.position = 'top')
+
+```
+
+<p dir="RTL">
+#۷ سوال
+مقدار خطا بیشتر شده است بنابراین مدل سوال ۴ دقت بالاتری دارد
+</p>
+
+```{r}
+
+mdata %>% 
+  filter(company == "AAPL") -> apple
+
+pca7 = prcomp(apple %>% select(-Date, -company, -cn, -Sector), scale. = T)
+
+index = sample(x= 1:nrow(apple),size = 0.8*nrow(apple),replace = F)
+
+pcaresiduals = data.frame()
+for (k in 1:10) {
+  
+  embed(pca7$x[,1], k) %>% as.data.frame() %>% 
+    filter(row_number() != max(row_number())) %>% 
+    mutate(open = apple$Open[-(1:k)]) -> tmp
+  
+  train = tmp[index,] 
+  test =  tmp[-index,]
+  
+  l2 = lm(open~., data = train)
+  
+  
+  train$prediction = predict( l2, newdata = train, type = "response" )
+  test$prediction  = predict( l2, newdata = test , type = "response" )
+  
+  test %>% 
+    mutate(residuals = (prediction - open)) -> test
+  
+  rbind(pcaresiduals, data.frame(residual = mean(test$residuals ^ 2), `k` = k)) -> pcaresiduals
+  
+}
+
+pcaresiduals %>% 
+  ggplot(aes(x = k, y = residual)) + geom_line()
+
+```
+
+<p dir="RTL">
+#۸ سوال
+چون اشتراک داده sp500
+و روزهایی که تمام شرکت ها قیمت دارند بسیار کم است شرکت هایی که داده قیمتشان ناقص است را از داده حف میکنیم تا تعداد اشتراک بالا برود و بتوانیم رگرسیون بزنیم
+با استفاده از تست نرمالیتی 
+shapiro wilk
+میابیم که توزیع سود نسبی نرمال نیست
+</p>
+
+```{r}
+sp500 = read_csv("stock/indexes.csv")
+
+sp500 %>% 
+  mutate(sp = SP500 - lag(SP500)) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = sp)) + geom_histogram(fill = "green", alpha = 0.5, bins = 150)
+
+shapiro.test((sp500 %>% mutate(sp = SP500 - lag(SP500)) %>% na.omit())$sp)
+
+pca8 = prcomp(data %>% select_if(colSums(is.na(.)) ==  0) %>% select(-Date))
+
+right_join(sp500 %>% 
+            mutate( log = if_else(SP500 > lead(SP500), 1, 0) ) %>%
+            select(Date, log)
+          ,
+          bind_cols(data %>% select_if(colSums(is.na(.)) ==  0) %>% select(Date), pca8$x %>% 
+                       as.data.frame() %>% select(1:10))) %>%
+      na.omit() -> d8
+
+
+index = sample(x= 1:nrow(d8),size = 0.8*nrow(d8),replace = F)
+
+train = d8[index,] 
+test =  d8[-index,]
+
+gl =  glm(log ~ . - Date, data = train, family = "binomial")
+
+
+train$prediction = predict( gl, newdata = train, type = "response" )
+test$prediction  = predict( gl, newdata = test , type = "response" )
+
+test %>% 
+  mutate(residuals = (prediction - log)) -> test
+
+mean(test$residuals ^ 2)
+
+```
+
+<p dir="RTL"> 
+#۹ سوال
+فشرده سازی با حدود ۳۴ مولفه اول هم از حجم خوبی برخوردار است و هم کیفیت عکس را تا حد خوبی حفظ کرده است
+</p>
+
+```{r}
+library("EBImage")
+pic = flip(readImage("stock.jpg"))
+red.weigth   = .2989; green.weigth = .587; blue.weigth  = 0.114
+img = red.weigth * imageData(pic)[,,1] +
+  green.weigth * imageData(pic)[,,2] + blue.weigth  * imageData(pic)[,,3]
+
+pca.img = prcomp(img, scale=TRUE)
+
+images = list()
+for(n in seq(2, 100, by = 2)) {
+  chosen.components = 1:n
+  feature.vector = pca.img$rotation[,chosen.components]
+  compact.data = t(feature.vector) %*% t(img)
+  images[[n]] = t(feature.vector %*% compact.data) 
+}
+
+```
+
+```{r, eval = F}
+  for (n in seq(2, 100, by = 2)) {
+    #print(n)
+    jpeg(paste0("simg", as.character(n), ".jpg"))
+    image(images[[n]], col = grey(seq(0, 1, length = 256)))
+    dev.off()
+}
+```
+
+```{r}
+img.size = data.frame()
+for (n in seq(2, 100, by = 2)) {
+  #print(file.info(paste0("simg", as.character(n), ".jpg"))$size )
+  rbind(img.size, data.frame(size = file.info(paste0("simg", as.character(n), ".jpg"))$size, PCAcomp = n)) -> img.size
+}
+
+img.size %>% 
+  ggplot(aes(x = PCAcomp, y = size)) + geom_line(col = "tomato")
+
+```
+
+<p dir="RTL"> 
+#۱۰ سوال
+* دریابیم آیا روزهای خاصی از سال هستند که خرید سهام در آنها سودآور تر از بقیه باشد
+* پر ثبات ترین سهام ها کدام هستند؟
+* پرسودترین سهام ها (بطور میانگین) کدام هستند؟
+* رگرسیون تعداد خرید یک سهام برحسب اختلاف قیمت شروع $k$ روز قبل
+* برحسب شیب رشد قیمت چه شرکت هایی روشن ترین آینده را دارند؟
+</p>

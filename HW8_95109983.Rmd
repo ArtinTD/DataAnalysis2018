@@ -1,0 +1,388 @@
+---
+title: "Data Analysis HW8"
+author: "Artin Tajdini 95109983"
+date: "May 5, 2018"
+output:   
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = "",error = F,message = F,
+                      warning = F,fig.width = 10,fig.height = 6,fig.align = "center")
+
+library(gutenbergr)
+library(wordcloud2)
+library("tm")
+library(ggplot2)
+library(tidytext)
+library(dplyr)
+library(stringr)
+
+```
+
+```{r}
+gutenberg_metadata %>%
+  filter(str_detect(author,"Dickens, Charles"), language == "en", has_text) 
+
+bookid = c(580, 730, 967, 700, 917, 968, 821, 766, 1023, 786, 963, 98, 1400, 883, 564)
+
+dickens = list()
+cnt = 1
+
+for (v in bookid) {
+  dickens[cnt] = list(gutenberg_download(v)$text)
+  cnt = cnt + 1
+}
+
+```
+
+<div dir="RTL">
+#سؤال ۱
+</div>
+
+```{r}
+all_dickens = character()
+booknames = character()
+
+
+for (i in 1:(cnt - 1)) {
+  all_dickens = c( all_dickens, dickens[[i]])
+    booknames = c(booknames, dickens[[i]][1])
+}
+
+booknames %>% str_trim() %>% str_to_lower() -> booknames
+
+
+all_dickens %>%
+  str_replace_all("\"","") %>% 
+  str_replace_all("[[:punct:]]","") %>% 
+  str_replace_all("\\W"," ") %>% 
+  str_split(pattern = "\\s") %>% 
+  unlist() %>% 
+  str_to_lower() %>% 
+  removeWords(., (str_replace_all(stop_words$word ,"[[:punct:]]",""))) %>% 
+  str_trim() %>% 
+  table() %>% 
+  as.data.frame(stringsAsFactors = F) -> wcdickens
+colnames(wcdickens) = c("word","count")
+
+wcdickens %>% arrange(desc(count)) %>%
+  filter(nchar(word) > 1) %>% 
+  slice(1:20) %>% 
+  ggplot(aes(x = reorder(word, -count), y = count)) + geom_col()
+
+```
+
+<div dir="RTL">
+#سؤال ۲
+</div>
+
+```{r}
+wcdickens %>% arrange(desc(count)) %>% 
+  filter(nchar(word) > 1) %>% 
+  slice(1:200) -> wcdickens
+
+wordcloud2(wcdickens)
+wordcloud2(wcdickens, figPath = "dickens1_1.png")
+
+```
+
+<div dir="RTL">
+#سؤال ۳
+</div>
+
+```{r}
+chars = data.frame()
+
+for (i in 1:(cnt - 1)) {
+  
+  if(length(dickens[[i]]) > 1){  
+    dickens[[i]] %>%
+      str_replace_all("\"","") %>% 
+      str_replace_all("[[:punct:]]","") %>% 
+      str_replace_all("\\W"," ") %>% 
+      str_split(pattern = "\\s") %>% 
+      unlist() %>% 
+      str_trim() %>% 
+      table() %>% 
+      as.data.frame(stringsAsFactors = F) -> words
+    colnames(words) = c('word', 'count')
+
+    words$book = rep(booknames[i], nrow(words))    
+      
+    chars = rbind( words %>% 
+      filter(!str_to_lower(word) %in% str_replace_all(stop_words$word ,"[[:punct:]]","")) %>% 
+      filter(str_length(word) > 1) %>% 
+      filter( str_detect(word, "^[[:upper:]]") ) %>% 
+      arrange(desc(count)) %>% 
+      slice(1:5), chars )
+    }
+}
+
+
+
+chars %>% 
+  arrange(desc(count)) %>% 
+  ggplot(aes(x = reorder(word, -count), y = count, fill = as.factor(book))) + geom_col() + facet_wrap(~book, scales = "free") + theme(axis.text.x = element_text(angle = 45, vjust = 1,    size = 8, hjust = 1))
+```
+
+<div dir="RTL">
+#سؤال ۴
+</div>
+
+```{r}
+pos = sentiments %>% filter(sentiment == "positive") %>% .$word
+neg = sentiments %>% filter(sentiment == "negative") %>% .$word
+
+for (i in 1:(cnt - 1)) {
+  
+  if(length(dickens[[i]]) > 1){  
+    dickens[[i]] %>%
+      str_replace_all("\"","") %>% 
+      str_replace_all("[[:punct:]]","") %>% 
+      str_replace_all("\\W"," ") %>% 
+      str_split(pattern = "\\s") %>% 
+      unlist() %>% 
+      str_trim() %>% 
+      table() %>% 
+      as.data.frame(stringsAsFactors = F) -> words
+    colnames(words) = c('word', 'count')
+    
+    rbind(
+      words %>% 
+        filter(!str_to_lower(word) %in% str_replace_all(stop_words$word ,"[[:punct:]]","")) %>% 
+        filter(str_length(word) > 1) %>% 
+        filter(str_to_lower(word) %in% neg) %>% 
+        mutate(type = rep("negative", n())) %>% 
+        arrange(desc(count)) %>% 
+        slice(1:20),
+      words %>% 
+        filter(!str_to_lower(word) %in% str_replace_all(stop_words$word ,"[[:punct:]]","")) %>% 
+        filter(str_length(word) > 1) %>% 
+        filter(str_to_lower(word) %in% pos) %>% 
+        mutate(type = rep("positive", n())) %>% 
+        arrange(desc(count)) %>% 
+        slice(1:20)
+    ) -> tmp 
+    print((ggplot(tmp, aes(x = reorder(word, -count), y = count, fill = type)) + geom_col() + facet_grid(~type, scales = "free") + ggtitle(booknames[i]))) + theme(axis.text.x = element_text(angle = 45, vjust = 1,    size = 8, hjust = 1))
+  }
+}
+
+```
+
+<div dir="RTL">
+#سؤال ۵
+</div>
+
+```{r}
+binava = gutenberg_download(135)
+
+binava$text %>% 
+  str_replace_all("\"","") %>% 
+  str_replace_all("[[:punct:]]","") %>% 
+  str_replace_all("\\W"," ") %>% 
+  str_split(pattern = "\\s") %>%
+  unlist() %>% 
+  str_trim() %>% 
+  as.data.frame(stringsAsFactors = F) -> wbinava
+  
+  colnames(wbinava) = c("word")
+  wbinava %>% 
+    mutate(sec = ntile(x = row_number(),n = 100)) %>%
+    group_by(sec) %>% 
+    summarise(
+      p = sum(str_to_lower(word) %in% pos),
+      n = sum(str_to_lower(word) %in% neg)
+    ) %>% 
+    ggplot() + geom_point(aes(x = sec, y = n, col = "red")) + geom_line(aes(x = sec, y = n, col = "red")) + geom_line(aes(x = sec, y = p, col = "blue")) + geom_point(aes(x = sec, y = p, col = "blue"))
+
+```
+
+<div dir="RTL">
+#سؤال ۶
+</div>
+
+```{r}
+  unnest_tokens(wbinava ,bigram, word, token = "ngrams", n = 2) -> twogram
+  twogram %>% count(bigram, sort = T) %>% slice(1: 30) %>%
+    ggplot(aes(x = reorder(bigram, -n), y = n)) + geom_col() +  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+```
+
+<div dir="RTL">
+#سؤال ۷
+</div>
+
+```{r}
+  twogram %>% 
+  filter(str_detect(bigram, "^he |^she ")) %>% 
+    count(bigram, sort = T) %>% mutate(bigram = str_replace(bigram, "he |she ", "")) %>%
+    group_by(bigram) %>% summarise(n = sum(n)) %>% arrange(desc(n)) %>% 
+    slice(1:20) %>% ggplot(aes(x = reorder(bigram, -n), y = n)) + geom_col() +  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+```
+
+<div dir="RTL">
+#سؤال ۸
+برای چک کردن یکی بودن توزیع پر تکرار ترین مونو و بایوگرام از خی اسکوئر استفاده میکنیم
+و میابیم که توزیع ها یکی نیستند
+</div>
+
+```{r}
+  dfdickens = data.frame()
+  for (i in 1:(cnt - 1)) {
+    
+    if(length(dickens[[i]]) > 1){  
+      dickens[[i]] %>%
+        str_replace_all("\"","") %>% 
+        str_replace_all("[[:punct:]]","") %>% 
+        str_replace_all("\\W"," ") %>% 
+        str_split(pattern = "\\s") %>% 
+        unlist() %>% 
+        str_trim() %>% 
+        as.data.frame(stringsAsFactors = F) -> words
+      colnames(words) = c('word')
+      
+      words$book = rep(booknames[i], nrow(words))    
+      
+      words = words %>% 
+        filter(!str_to_lower(word) %in% str_replace_all(stop_words$word ,"[[:punct:]]","")) %>% 
+        filter(str_length(word) > 1) %>% 
+        mutate(chapter = cumsum(str_detect(str_to_lower(word), "chapter")))
+      
+      dfdickens = rbind( dfdickens, words )
+    }
+  }
+  
+  unnest_tokens(dfdickens ,bigram, word, token = "ngrams", n = 1) -> unidickens
+
+  unidickens %>% 
+    count(bigram, sort = T) %>% 
+    slice(1:30) %>% .$bigram -> unigram1
+  
+  unidickens %>% 
+    group_by(book, chapter) %>% 
+    filter(bigram %in% unigram1) %>% 
+    count(bigram, sort = T) %>% 
+    tidyr::spread(bigram, n) -> unidickens1
+
+  unidickens1[is.na(unidickens1)] = 0
+  
+  chisq.test(as.matrix(unidickens1[-(1:2)]))
+  
+  unidickens %>% 
+    group_by(book, chapter) %>% 
+    filter(n() > 50 & bigram %in% unigram1) %>% 
+    count(bigram, sort = T) %>%
+    ggplot(aes(x = bigram, y = n, fill = book)) + geom_col() + facet_wrap(~book, scales = "free")    + theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 8, hjust = 1)) 
+
+
+    unnest_tokens(dfdickens ,bigram, word, token = "ngrams", n = 2) -> biodickens
+  
+  biodickens %>% 
+    count(bigram, sort = T) %>% 
+    slice(1:10) %>% .$bigram -> biogram1
+  
+  library(dplyr)
+  
+  biodickens %>%
+    filter(bigram %in% biogram1) %>%
+    group_by(book, chapter) %>% 
+    count(bigram, sort = T) %>% 
+    tidyr::spread(bigram, n) -> biodickens1
+  
+  biodickens1[is.na(biodickens1)] = 0
+  
+  chisq.test(as.matrix(biodickens1[-(1:2)]))
+  
+  biodickens %>% 
+    group_by(book, chapter) %>% 
+    filter(n() > 50 & bigram %in% biogram1) %>% 
+    count(bigram, sort = T) %>%
+    ggplot(aes(x = bigram, y = n, fill = book)) + geom_col() + facet_wrap(~book, scales = "free") + theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 8, hjust = 1)) 
+```
+
+<div dir="RTL">
+#سؤال ۹
+</div>
+
+```{r}
+  gutenberg_metadata %>%
+    filter(str_detect(author,"Hugo, Victor"), language == "en", has_text) %>% .$gutenberg_id -> hid
+  
+  
+  hugo = list()
+  cnt = 1
+  hugonames = character()
+  
+  for (v in hid) {
+    hugo[cnt] = list(gutenberg_download(v)$text)
+    cnt = cnt + 1
+  }
+  
+  
+  dfhugo = data.frame()
+  for (i in 1:(cnt - 1)) {
+    
+    if(length(hugo[[i]]) > 1){  
+      hugo[[i]] %>%
+        str_replace_all("\"","") %>% 
+        str_replace_all("[[:punct:]]","") %>% 
+        str_replace_all("\\W"," ") %>% 
+        str_split(pattern = "\\s") %>% 
+        unlist() %>% 
+        str_trim() %>% 
+        as.data.frame(stringsAsFactors = F) -> words
+      colnames(words) = c('word')
+      
+      words$book = rep(as.character(i), nrow(words))    
+      
+      words = words %>% 
+        filter(!str_to_lower(word) %in% str_replace_all(stop_words$word ,"[[:punct:]]","")) %>% 
+        filter(str_length(word) > 1) %>% 
+        mutate(chapter = cumsum(str_detect(str_to_lower(word), "chapter")))
+      
+      dfhugo = rbind( dfhugo, words )
+    }
+  }
+  
+  unnest_tokens(dfhugo ,bigram, word, token = "ngrams", n = 2) -> biohugo
+  
+  biohugo %>% 
+    count(bigram, sort = T) %>% 
+    slice(1:10) %>% .$bigram -> biogram2
+  
+  biohugo %>% 
+    group_by(book, chapter) %>% 
+    filter(bigram %in% biogram2) %>% 
+    count(bigram, sort = T) %>% 
+    tidyr::spread(bigram, n) -> biohugo2
+  
+  biohugo2[is.na(biohugo2)] = 0
+  
+  chisq.test(as.matrix(biohugo2[-(1:2)]))
+  
+  biohugo %>% 
+    group_by(book, chapter) %>% 
+    filter(n() > 50 & bigram %in% biogram2) %>% 
+    count(bigram, sort = T) %>%
+    ggplot(aes(x = bigram, y = `n`, fill = book)) + geom_col() + facet_wrap(~book, scales = "free") + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+```
+
+<div dir="RTL">
+#سؤال ۱۰
+</div>
+
+
+```{r}
+rbind(biodickens1 %>% mutate(writer = 1L),
+        biohugo2 %>% mutate(writer = 0L)) -> merged
+  merged[is.na(merged)] = 0
+  
+  glm(formula = writer ~ ., family = binomial, data = merged) %>% summary
+  
+```
